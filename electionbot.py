@@ -10,6 +10,13 @@ from discord.ext import commands
 from discord.ext.commands import Bot
 from gspread import Cell
 
+##### ELECTION INFO ###########################################################
+ELECTION_NAME = "name of election here"
+ELECTION_LENGTH_IN_DAYS = 10
+PASSWORD = "password here"
+ADMIN_USER = 0  # Enter Discord Snowflake ID of bot administrator
+###############################################################################
+
 ##### DISCORD INFO ############################################################
 TOKEN = "token here"
 ###############################################################################
@@ -26,7 +33,7 @@ GOOGLE_TABS = {
 ###############################################################################
 
 ##### GLOBAL VARIABLES ########################################################
-PASSWORD = "password here"
+SECONDS_IN_DAY = 24 * 60 * 60
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 IGNORE_HEADERS = [
     "UNIX Timestamp",
@@ -41,8 +48,8 @@ PLAYERS = {item['discordID']:item for item in json.load(open('players.json','r')
 intents = discord.Intents.default()
 intents.guild_messages = False      # Make bot only reply to DMs.
 intents.message_content = True
-activity = discord.Activity(type=discord.ActivityType.watching, name="LOM Elections")
-bot = Bot(command_prefix="-", intents=intents, activity=activity)
+activity = discord.Activity(type=discord.ActivityType.watching, name=ELECTION_NAME)
+bot = Bot(command_prefix="-", case_insensitive=True, intents=intents, activity=activity)
 ###############################################################################
 
 ##### FUNCTIONS ###############################################################
@@ -130,7 +137,7 @@ def ballot_display(ctx, candidates, user_ballot, mention=True):
                 message += f"  —  {user_ballot[c]}"
             letter += 1
     
-    message += "\nType `-approve <letters>` or `-disapprove <letters>` to vote."
+    message += "\n\nTo vote, use the following commands:\n* To approve candidates, type `-approve <letters>`\n* To disapprove candidates, type `-disapprove <letters>`\n* To abstain on candidates, type `-abstain <letters>`"
 
     return message
 
@@ -144,7 +151,7 @@ def dates_get():
     if start_time == 0:
         return None, None
     else:
-        return start_time, start_time+(9*24*60*60)
+        return start_time, start_time+(ELECTION_LENGTH_IN_DAYS*SECONDS_IN_DAY)
     
 def info_func(ctx, ballot_count, start_date, end_date):
     '''Sends user information about the election.'''
@@ -170,7 +177,7 @@ def info_func(ctx, ballot_count, start_date, end_date):
     return 1, message
 
 def vote_func(ctx, type, list):
-    '''Votes to approve or disapprove candidates.'''
+    '''Votes to approve, disapprove, or abstain candidates.'''
     gc = gspread.service_account(filename=GOOGLE_AUTH)
     sht1 = gc.open_by_key(GOOGLE_SHEET)
     worksheet = sht1.worksheet(GOOGLE_TABS['votes'])
@@ -233,11 +240,11 @@ def vote_func(ctx, type, list):
             if candidates[i] in cand_list:
                 append_vote.append(type)
             else:
-                append_vote.append("disapprove")        # We assume disapprove if not approved
+                append_vote.append("abstain")        # We assume abstain if not approved
 
         # Post row
         vote_ballot = append_vote
-        worksheet.append_row(append_vote, table_range="A1:L1")
+        worksheet.append_row(append_vote, table_range="A1:P1")
     
     # Generate the message
     if len(cand_list) > 0:     # If there are any candidates, display the list
@@ -281,7 +288,11 @@ def log_interaction(ctx, command, arguments, bot_reply, log_type):
 
 ### -start <pw> <date>
 ###     Starts the election process
-@bot.command(hidden=True, brief="Start the election", description="-start <password> <date>\nStarts the election at noon of the given date.")
+@bot.command(
+        hidden=True,
+        brief="Start the election",
+        description="-start <password> <date>\nStarts the election at noon of the given date."
+    )
 @commands.cooldown(1, 30, commands.BucketType.default)
 async def start(ctx, pw:str="", *, start_date:str=""):
     await ctx.message.add_reaction('👍')                            # Let user know we received the request
@@ -291,7 +302,11 @@ async def start(ctx, pw:str="", *, start_date:str=""):
 
 ### -end <pw>
 ###     Ends the election process
-@bot.command(hidden=True, brief="End the election", description="-end <password> <date>\nEnds the election immediately.")
+@bot.command(
+        hidden=True,
+        brief="End the election",
+        description="-end <password> <date>\nEnds the election immediately."
+    )
 @commands.cooldown(1, 30, commands.BucketType.default)
 async def end(ctx, pw:str=""):
     await ctx.message.add_reaction('👍')                    # Let user know we received the request
@@ -301,7 +316,10 @@ async def end(ctx, pw:str=""):
 
 ### -info
 ###     Gives information about the election
-@bot.command(brief="Get election information", description="-info\nGives basic information about the election.")
+@bot.command(
+        brief="Get election information",
+        description="-info\nGives basic information about the election."
+    )
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def info(ctx):
     await ctx.message.add_reaction('👍')                                    # Let user know we received the request
@@ -313,7 +331,10 @@ async def info(ctx):
 
 ### -ballot
 ###     Sends user their current ballot
-@bot.command(brief="View your ballot", description="-ballot\nDisplays your current ballot. If you have no ballot, displays the candidates.")
+@bot.command(
+        brief="View your ballot",
+        description="-ballot\nDisplays your current ballot. If you have no ballot, displays the candidates."
+    )
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def ballot(ctx):
     await ctx.message.add_reaction('👍')                    # Let user know we received the request
@@ -324,7 +345,10 @@ async def ballot(ctx):
 
 ### -approve <list>
 ###     Sets vote to "Approve" for the listed candidates
-@bot.command(brief="Mark candidate(s) as Approved", description="-approve <approve_list>\nApprove a list of candidates.\nThis list can include any number of letters. (ex: -approve xyz)")
+@bot.command(
+        brief="Mark candidate(s) as Approved",
+        description="-approve <approve_list>\nApprove a list of candidates.\nThis list can include any number of letters. (ex: -approve xyz)"
+    )
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def approve(ctx, *, approve_list:str=commands.parameter(default=None, description="List of letters from ballot of candidates to approve.")):
     await ctx.message.add_reaction('👍')                                # Let user know we received the request
@@ -337,7 +361,10 @@ async def approve(ctx, *, approve_list:str=commands.parameter(default=None, desc
 
 ### -disapprove <list>
 ###     Sets vote to "Disapprove" for the listed candidates
-@bot.command(brief="Mark candidate(s) as Disapproved", description="-disapprove <disapprove_list>\nDisapprove a list of candidates.\nThis list can include any number of letters. (ex: -disapprove xyz)")
+@bot.command(
+        brief="Mark candidate(s) as Disapproved",
+        description="-disapprove <disapprove_list>\nDisapprove a list of candidates.\nThis list can include any number of letters. (ex: -disapprove xyz)"
+    )
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def disapprove(ctx, *, disapprove_list:str=commands.parameter(default=None, description="List of letters from ballot of candidates to disapprove.")):
     await ctx.message.add_reaction('👍')                                        # Let user know we received the request
@@ -347,6 +374,57 @@ async def disapprove(ctx, *, disapprove_list:str=commands.parameter(default=None
         message = vote_func(ctx, "disapprove", disapprove_list)                 # Since election is active, log vote
     log_interaction(ctx, "disapprove", disapprove_list, message, "sheet")       # Log the interaction to the sheet
     await ctx.author.send(message)
+
+### -abstain <list>
+###     Sets vote to "Abstain" for the listed candidates
+@bot.command(
+        brief="Mark candidate(s) as Abstain",
+        description="-abstain <abstain_list>\nAbstain a list of candidates.\nThis list can include any number of letters. (ex: -abstain xyz)"
+    )
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def abstain(ctx, *, abstain_list:str=commands.parameter(default=None, description="List of letters from ballot of candidates to abstain.")):
+    await ctx.message.add_reaction('👍')                                        # Let user know we received the request
+    start_date, end_date = dates_get()                                          # Get start and end dates of the election
+    status, message = info_func(ctx, None, start_date, end_date)                # Get status of election
+    if status == 1:
+        message = vote_func(ctx, "abstain", abstain_list)                       # Since election is active, log vote
+    log_interaction(ctx, "abstain", abstain_list, message, "sheet")             # Log the interaction to the sheet
+    await ctx.author.send(message)
+
+### -servers
+###     Shows list of servers the bot is in. Only works for Stupido Einsteiny
+@bot.command(
+        hidden=True,
+        brief="List servers",
+        description="-servers\nShow list of servers the bot has joined.\nThis list will only work for ADMIN_USER."
+    )
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def servers(ctx):
+    await ctx.message.add_reaction('👍')
+    if ctx.author.id == ADMIN_USER:
+        message = "The bot is in the following servers:"
+        for guild in bot.guilds:
+            message += f"\n   {guild.name} ({guild.id})"
+        await ctx.author.send(message)
+
+### -leave_server <server_id>
+###     Leaves the server listed. Only works for Stupido Einsteiny
+@bot.command(
+        hidden=True,
+        brief="Leave server",
+        description="-leave_server <server_id>\nLeave the listed server.\nThis will only work for ADMIN_USER."
+    )
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def leave_server(ctx, server_id:str=commands.parameter(default=None, description="Server id of the server to leave.")):
+    await ctx.message.add_reaction('👍')
+    if ctx.author.id == ADMIN_USER:
+        guild = discord.utils.get(bot.guilds, id=int(server_id))
+        if guild is None:
+            message = "No guild with that id found."
+        else:
+            await guild.leave()
+            message = f"I left {guild.name} ({guild.id})"
+        await ctx.author.send(message)
 ###############################################################################
 
 ##### BOT EVENTS ##############################################################
@@ -363,7 +441,7 @@ async def on_ready():
     with open(f'start.csv', 'r') as f:
         start_time = int(f.read())
         if start_time > 0:
-            end_time = start_time+(9*24*60*60)
+            end_time = start_time+(ELECTION_LENGTH_IN_DAYS*SECONDS_IN_DAY)
     curr_time = int(time.time())    # Get current time in Unix timestamp
 
     if start_time == 0:
